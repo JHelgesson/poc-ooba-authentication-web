@@ -1,0 +1,101 @@
+<script src="jquery.min.js"></script>
+<script src="qrcode.min.js"></script>
+<b>Custom Auth Provider AD FS Web Part -> Anslutning Inera Autentiseringstjänst</b>
+<hr />
+<div id="qrcode"></div>
+<div id="status"></div>
+
+<script type="text/javascript">
+$(document).ready(function(){
+    function uuidv4() {
+        return ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c =>
+            (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)
+        );
+    }
+
+    var completeResponse = {
+        "status": "SUCCESS",
+        "hintCode": "string",
+        "completionData": {
+            "userCertificate": "string",
+            "revocationStatus": {
+                "status": "ACCEPTED",
+                "reason": {},
+                "ocspResponse": "string",
+                "credentialId": "string",
+                "type": "OCSP"
+            },
+            "credentialInformation": {
+            "subject": "string",
+            "issuer": "string",
+            "expireAt": "2022-12-22T08:53:08.302Z"
+            }
+        }
+    }
+
+    var pendingResponse = {
+        "status": "PENDING",
+        "hintCode": "STARTED"
+    }
+
+    var failedResponse = {
+        "status": "FAILED",
+        "hintCode": "EXPIRED_TRANSACTION"
+    }
+
+    var responseArray = [completeResponse, pendingResponse, pendingResponse, pendingResponse, pendingResponse, pendingResponse, pendingResponse];
+    
+    var qrcode = new QRCode(document.getElementById("qrcode"), {
+        text: "siths://?autostarttoken=" + uuidv4(),
+        width: 256,
+        height: 256,
+        colorDark : "#000000",
+        colorLight : "#ffffff",
+        correctLevel : QRCode.CorrectLevel.H
+    });
+
+    let timerId = setTimeout(function tick() {
+        qrcode.clear();
+        
+        var response = collect();
+        $("#status").text(response.status + " (" + response.hintCode + ")");
+
+        if(response.status == "PENDING") {
+            qrcode.makeCode("siths://?autostarttoken=" + uuidv4());
+            timerId = setTimeout(tick, 2000);
+        }
+
+        if(response.status == "SUCCESS" || response.status == "FAILED") {
+            qrcode.clear();
+            $("#qrcode").hide();
+        }
+    }, 2000);
+
+    /*
+    /api/rp/v1/collect
+    - correlationId (header)
+    - med orderRef (body)
+
+    status: 
+        PENDING: The order is being processed. RP should continue to collect. hintCode describes the status of the order.
+        FAILED: Something went wrong with the order. This is a final state. hintCode describes the error.
+        COMPLETE: The order is complete. This is a final state. completionData holds user information.
+
+    hintCode:
+        OUTSTANDING_TRANSACTION => The order is pending. The client has not yet received the order.
+        STARTED => The order is pending. The client has picked up the order.
+        PENDING_NO_CLIENT => Not currently used. Reserved for future use.
+        PENDING_USER_SIGN => Not currently used. Reserved for future use.
+        EXPIRED_TRANSACTION => The order has failed. The order has expired. The SITHS EID security app/program did not start, the user did not finalize the signing or the RP called collect too late.
+        INVALID_QR_CODE => The order has failed. The user provided an invalid QR code.
+        CERTIFICATE_ERR => The order has failed. The user certificate may be revoked or invalid.
+        USER_CANCEL => The order has failed. The user decided to cancel the order.
+        CANCELLED => Not currently used. Reserved for future use.
+        START_FAILED => Not currently used. Reserved for future use.
+        COMPLETE_FAILED => The order has failed. The client could not complete the order.
+    */
+    function collect() {
+        return responseArray.pop();
+    } 
+});
+</script>
